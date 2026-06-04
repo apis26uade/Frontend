@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Respaldo local de integración backend (no subir al repo)
+_backup-backend-integration/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
