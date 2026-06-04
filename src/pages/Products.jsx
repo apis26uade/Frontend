@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronDownIcon } from '../components/Icons.jsx'
 import ProductCard from '../components/ProductCard.jsx'
-import { useAuth } from '../context/AuthContext.jsx'
-import { categories as fallbackCategories, featuredProducts } from '../data/products.js'
-import { getCategories, getProducts } from '../services/api.js'
+import { categories } from '../data/products.js'
+import { getProducts } from '../services/catalog.js'
 
 const sortOptions = [
   { value: 'default', label: 'Destacados' },
@@ -21,12 +20,8 @@ const priceRanges = [
 ]
 
 function Products() {
-  const { isAuthenticated } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [products, setProducts] = useState(featuredProducts)
-  const [categories, setCategories] = useState(fallbackCategories)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [loading, setLoading] = useState(true)
 
   const search = searchParams.get('q') ?? ''
   const selectedCategory = searchParams.get('categoria')
@@ -48,45 +43,29 @@ function Products() {
     })
   }
 
-  useEffect(() => {
-    Promise.all([getProducts(), getCategories()])
-      .then(([apiProducts, apiCategories]) => {
-        setProducts(apiProducts)
-        setCategories(apiCategories)
-      })
-      .catch(() => {
-        setProducts(featuredProducts)
-        setCategories(fallbackCategories)
-      })
-      .finally(() => setLoading(false))
-  }, [isAuthenticated])
+  const filteredProducts = useMemo(() => {
+    const normalizedSearch = search.toLowerCase()
+    const result = getProducts().filter((product) => {
+      const matchesSearch =
+        !search ||
+        `${product.productName} ${product.productDescription}`
+          .toLowerCase()
+          .includes(normalizedSearch)
+      const matchesCategory =
+        !selectedCategory || product.category?.idCategory === selectedCategory
+      const matchesPrice = product.price >= minPrice && product.price <= maxPrice
 
-  const filteredProducts = useMemo(
-    () => {
-      const normalizedSearch = search.toLowerCase()
-      const result = products.filter((product) => {
-        const matchesSearch =
-          !search ||
-          `${product.productName} ${product.productDescription}`
-            .toLowerCase()
-            .includes(normalizedSearch)
-        const matchesCategory =
-          !selectedCategory || product.category?.idCategory === selectedCategory
-        const matchesPrice = product.price >= minPrice && product.price <= maxPrice
+      return matchesSearch && matchesCategory && matchesPrice
+    })
 
-        return matchesSearch && matchesCategory && matchesPrice
-      })
+    if (sort === 'price-asc') return result.sort((a, b) => a.price - b.price)
+    if (sort === 'price-desc') return result.sort((a, b) => b.price - a.price)
+    if (sort === 'name') {
+      return result.sort((a, b) => a.productName.localeCompare(b.productName))
+    }
 
-      if (sort === 'price-asc') return result.sort((a, b) => a.price - b.price)
-      if (sort === 'price-desc') return result.sort((a, b) => b.price - a.price)
-      if (sort === 'name') {
-        return result.sort((a, b) => a.productName.localeCompare(b.productName))
-      }
-
-      return result
-    },
-    [maxPrice, minPrice, products, search, selectedCategory, sort],
-  )
+    return result
+  }, [maxPrice, minPrice, search, selectedCategory, sort])
 
   const activeCategory = categories.find(
     (category) => category.idCategory === selectedCategory,
@@ -201,9 +180,7 @@ function Products() {
 
         <div className="catalog-results">
           <p className="result-count">
-            {loading
-              ? 'Cargando...'
-              : `${filteredProducts.length} producto${filteredProducts.length !== 1 ? 's' : ''}`}
+            {`${filteredProducts.length} producto${filteredProducts.length !== 1 ? 's' : ''}`}
           </p>
 
           {filteredProducts.length ? (

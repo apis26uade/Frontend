@@ -1,74 +1,133 @@
 # Frontend — Alma Boho
 
-Interfaz web del proyecto **API_1C_2026**: tienda de moda boho construida con **React** y **Vite**. Consume la API REST del backend Spring Boot (`goated`) para autenticación, catálogo, carrito y pedidos. Si el backend no está disponible, algunas pantallas usan datos locales de respaldo.
+Tienda de moda boho del proyecto **API_1C_2026**, desarrollada con **React 19** y **Vite**.
+
+## Modo de ejecución actual
+
+La aplicación funciona **sin backend**: catálogo, autenticación, carrito, checkout, pedidos y panel admin usan datos en `src/data/` y **localStorage** del navegador. No hace falta levantar Spring Boot ni MySQL para probarla.
+
 
 ## Funcionalidades
 
-- Catálogo de productos y detalle por artículo
-- Registro e inicio de sesión (JWT)
-- Carrito de compras y checkout con códigos de descuento
+### Tienda (cliente)
+
+- Home, catálogo con filtros y búsqueda
+- Detalle de producto y productos relacionados
+- Carrito con cantidades, envío estimado y códigos de descuento
+- Checkout en **3 pasos**: envío → método de pago → confirmación
+- **Mis pedidos** e historial con detalle por pedido
+- Registro e inicio de sesión
 - Página de contacto
+- Toast al agregar productos al carrito
 
-## Requisitos previos
+### Administración
 
-- [Node.js](https://nodejs.org/) 18 o superior (se recomienda la versión LTS)
-- Backend **goated** en ejecución (ver [README del repositorio](../README.md))
+- Panel en `/admin` (solo rol admin)
+- CRUD de productos (se reflejan en el catálogo de la tienda)
+- Listado de pedidos y cambio de estado
 
-## Instalación
+### Métodos de pago (simulados)
 
-Desde la carpeta `frontend`:
+- Tarjeta de crédito
+- Tarjeta de débito
+- Transferencia bancaria
+
+No se procesa un cobro real; es una demostración de UI.
+
+## Requisitos
+
+- [Node.js](https://nodejs.org/) 18 o superior (recomendado LTS)
+
+## Instalación y ejecución
 
 ```bash
+cd frontend
 npm install
-```
-
-## Configuración (opcional)
-
-Por defecto la app apunta a `http://localhost:8080`. Para usar otra URL de la API, creá un archivo `.env` en esta carpeta:
-
-```env
-VITE_API_URL=http://localhost:8080
-```
-
-## Ejecución
-
-1. Levantá el backend (puerto **8080** por defecto).
-2. En `frontend`, iniciá el servidor de desarrollo:
-
-```bash
 npm run dev
 ```
 
-3. Abrí en el navegador la URL que muestra Vite (normalmente `http://localhost:5173`).
+Abrí la URL que muestra Vite (por defecto `http://localhost:5173`).
 
-## Otros comandos
+## Cuentas demo
 
-| Comando           | Descripción                          |
-|-------------------|--------------------------------------|
-| `npm run build`   | Genera la versión de producción      |
-| `npm run preview` | Previsualiza el build de producción  |
-| `npm run lint`    | Ejecuta ESLint sobre el código       |
+| Rol    | Email           | Contraseña |
+|--------|-----------------|------------|
+| Cliente | `demo@alma.com` | `demo123`  |
+| Admin   | `admin@alma.com` | `admin123` |
 
-## Estructura principal
+También podés **registrar** un usuario nuevo; se guarda en este navegador.
+
+## Códigos de descuento
+
+Usalos en el carrito: `VERANO10`, `BOHO15`, `ALMA20`.
+
+## Scripts
+
+| Comando           | Descripción                         |
+|-------------------|-------------------------------------|
+| `npm run dev`     | Servidor de desarrollo              |
+| `npm run build`   | Build de producción en `dist/`      |
+| `npm run preview` | Previsualizar el build              |
+| `npm run lint`    | ESLint                              |
+
+## Rutas
+
+| Ruta | Descripción |
+|------|-------------|
+| `/` | Inicio |
+| `/catalogo`, `/productos` | Catálogo |
+| `/producto/:id` | Detalle de producto |
+| `/carrito` | Carrito |
+| `/checkout` | Checkout (requiere login) |
+| `/pedidos` | Mis pedidos (requiere login) |
+| `/pedidos/:id` | Detalle del pedido |
+| `/login` | Iniciar sesión |
+| `/registro` | Crear cuenta |
+| `/contacto` | Contacto |
+| `/admin` | Panel admin (redirige a productos) |
+| `/admin/productos` | Gestión de productos |
+| `/admin/pedidos` | Gestión de pedidos |
+
+## Estructura del proyecto
 
 ```
-src/
-  components/   # Navbar, Footer, tarjetas de producto, etc.
-  context/      # Autenticación y carrito
-  pages/        # Rutas de la aplicación
-  services/     # Cliente HTTP hacia la API
-  data/         # Datos de respaldo cuando la API no responde
+frontend/
+├── src/
+│   ├── components/       # UI reutilizable (Navbar, CartToast, admin…)
+│   ├── context/          # AuthContext, CartContext
+│   ├── data/             # Productos, categorías, métodos de pago
+│   ├── pages/            # Pantallas de la tienda
+│   ├── pages/admin/      # Panel de administración
+│   ├── services/         # Lógica local (catálogo, auth, pedidos)
+│   └── styles/           # Fuentes (Montserrat + Playfair Display)
+├── _backup-backend-integration/  # Respaldo API Spring (futuro)
+└── public/
 ```
 
-## Rutas de la aplicación
+## Persistencia local (demo)
 
-| Ruta              | Pantalla        |
-|-------------------|-----------------|
-| `/`               | Inicio          |
-| `/catalogo`       | Catálogo        |
-| `/producto/:id`   | Detalle         |
-| `/carrito`        | Carrito         |
-| `/checkout`       | Finalizar compra|
-| `/login`          | Inicio de sesión|
-| `/registro`       | Registro        |
-| `/contacto`       | Contacto        |
+| Clave | Contenido |
+|-------|-----------|
+| `boho_auth` | Sesión del usuario |
+| `boho_cart` | Ítems del carrito |
+| `boho_catalog` | Catálogo editado desde admin |
+| `boho_orders` | Pedidos confirmados |
+| `boho_users` | Usuarios registrados |
+
+Los datos son **por navegador**. Limpiar el almacenamiento del sitio borra carrito, pedidos y sesión.
+
+## Tipografías
+
+- **Montserrat** — navegación, botones y textos de interfaz
+- **Playfair Display** — títulos y marca “Boho”
+
+## Integración con backend (futuro)
+
+1. Levantar `goated` (Spring + MySQL) en `http://localhost:8080`
+2. Revisar `_backup-backend-integration/README.md`
+3. Restaurar o fusionar `api.js` y los contextos con las llamadas HTTP
+4. Opcional: variable `VITE_API_URL` en `.env`
+
+## Repositorio
+
+Frontend publicado en: [https://github.com/apis26uade/Frontend.git](https://github.com/apis26uade/Frontend.git)

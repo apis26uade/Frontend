@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { EyeIcon, EyeOffIcon } from '../components/Icons.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
-import { useCart } from '../context/CartContext.jsx'
+import { DEMO_ADMIN, DEMO_USER } from '../services/localAuth.js'
 
 const LOGIN_IMAGE =
   'https://images.unsplash.com/photo-1751243958813-8ec1669abef9?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=900&q=85'
@@ -11,7 +11,6 @@ function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const { login } = useAuth()
-  const { syncLocalToBackend } = useCart()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -29,8 +28,7 @@ function Login() {
     setError('')
 
     try {
-      const session = await login(email, password)
-      await syncLocalToBackend(session.idUser)
+      await login(email, password)
       navigate(redirectTo, { replace: true })
     } catch (submitError) {
       setError(submitError.message || 'Error al iniciar sesion')
@@ -103,11 +101,14 @@ function Login() {
           </p>
 
           <div className="auth-demo-box">
-            <strong>Demo</strong>
+            <strong>Cuentas demo</strong>
             <p>
-              El backend debe estar corriendo en <code>localhost:8080</code>. Si no esta
-              disponible, podes navegar el catalogo con datos de muestra.
+              Cliente: <code>{DEMO_USER.email}</code> / <code>{DEMO_USER.password}</code>
             </p>
+            <p>
+              Admin: <code>{DEMO_ADMIN.email}</code> / <code>{DEMO_ADMIN.password}</code>
+            </p>
+            <p>Tambien podes crear una cuenta nueva; se guarda en este navegador.</p>
           </div>
         </div>
       </div>

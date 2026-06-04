@@ -38,11 +38,6 @@ function Cart() {
     const code = discountCode.trim()
     if (!code) return
 
-    if (!isAuthenticated) {
-      setDiscountMessage('Inicia sesion para aplicar un codigo')
-      return
-    }
-
     setApplyingDiscount(true)
     try {
       const discount = await getDiscountByCode(code)

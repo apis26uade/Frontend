@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import CheckoutSummary from '../components/CheckoutSummary.jsx'
+import {
+  CheckIcon,
+  CreditCardIcon,
+  MapPinIcon,
+  PackageIcon,
+} from '../components/Icons.jsx'
 import { useAuth } from '../context/AuthContext.jsx'
 import { useCart } from '../context/CartContext.jsx'
+import { PAYMENT_METHODS } from '../data/paymentMethods.js'
 import { createOrder } from '../services/api.js'
+import { formatOrderId } from '../services/orders.js'
 
 const formatPrice = (price) =>
   new Intl.NumberFormat('es-AR', {
@@ -11,7 +20,7 @@ const formatPrice = (price) =>
     maximumFractionDigits: 2,
   }).format(price)
 
-const initialForm = {
+const initialShipping = {
   name: '',
   email: '',
   phone: '',
@@ -26,42 +35,76 @@ function Checkout() {
   const { isAuthenticated, user } = useAuth()
   const {
     items,
-    cartId,
     subtotal,
-    shipping,
+    shipping: shippingCost,
     discountCode,
     discountPercent,
     discountAmount,
     total,
     clearCart,
   } = useCart()
-  const [form, setForm] = useState(initialForm)
-  const [completed, setCompleted] = useState(false)
+
+  const [step, setStep] = useState('shipping')
+  const [shippingForm, setShippingForm] = useState(initialShipping)
+  const [paymentMethod, setPaymentMethod] = useState('credit')
+  const [cardForm, setCardForm] = useState({
+    cardNumber: '',
+    expiry: '',
+    cvv: '',
+    cardName: '',
+  })
+  const [orderId, setOrderId] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const selectedPayment = PAYMENT_METHODS.find((method) => method.id === paymentMethod)
 
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login', { state: { from: '/checkout' }, replace: true })
       return
     }
-    if (!items.length && !completed) {
+    if (!items.length && step !== 'success') {
       navigate('/carrito', { replace: true })
     }
     if (user?.email) {
-      setForm((current) => ({ ...current, email: user.email }))
+      setShippingForm((current) => ({
+        ...current,
+        email: user.email,
+        name: current.name || user.name || '',
+      }))
+      setCardForm((current) => ({
+        ...current,
+        cardName: current.cardName || user.name || '',
+      }))
     }
-  }, [completed, isAuthenticated, items.length, navigate, user?.email])
+  }, [isAuthenticated, items.length, navigate, step, user?.email, user?.name])
 
-  const handleChange = (event) => {
+  const updateShipping = (event) => {
     const { name, value } = event.target
-    setForm((current) => ({ ...current, [name]: value }))
+    setShippingForm((current) => ({ ...current, [name]: value }))
   }
 
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    if (!cartId || !user?.idUser) {
-      setError('No se encontro el carrito del usuario')
+  const updateCard = (event) => {
+    const { name, value } = event.target
+    setCardForm((current) => ({ ...current, [name]: value }))
+  }
+
+  const canContinueShipping =
+    shippingForm.name &&
+    shippingForm.phone &&
+    shippingForm.address &&
+    shippingForm.city &&
+    shippingForm.postalCode
+
+  const canConfirmPayment =
+    selectedPayment &&
+    (!selectedPayment.requiresCard ||
+      (cardForm.cardNumber && cardForm.expiry && cardForm.cvv && cardForm.cardName))
+
+  const handleConfirmOrder = async () => {
+    if (!user?.idUser) {
+      setError('Debes iniciar sesion para confirmar la compra')
       return
     }
 
@@ -69,13 +112,29 @@ function Checkout() {
     setError('')
 
     try {
-      await createOrder(
-        user.idUser,
-        Number(cartId),
-        discountPercent > 0 ? discountCode.trim() : undefined,
-      )
+      const order = await createOrder({
+        userId: user.idUser,
+        userEmail: shippingForm.email || user.email,
+        items,
+        shipping: shippingForm,
+        paymentMethod: {
+          type: paymentMethod,
+          label: selectedPayment?.label,
+          last4: selectedPayment?.requiresCard
+            ? cardForm.cardNumber.replace(/\s/g, '').slice(-4)
+            : null,
+        },
+        discountCode: discountPercent > 0 ? discountCode.trim() : undefined,
+        totals: {
+          subtotal,
+          discountAmount,
+          shipping: shippingCost,
+          total,
+        },
+      })
+      setOrderId(order.idOrder)
       clearCart()
-      setCompleted(true)
+      setStep('success')
     } catch (submitError) {
       setError(submitError.message || 'No se pudo confirmar la compra')
     } finally {
@@ -83,18 +142,33 @@ function Checkout() {
     }
   }
 
-  if (completed) {
+  if (step === 'success') {
     return (
-      <section className="checkout-page section-container center-section">
+      <section className="checkout-page section-container center-section checkout-success">
+        <div className="checkout-success-icon" aria-hidden="true">
+          <CheckIcon size={36} />
+        </div>
         <p className="eyebrow">Pedido confirmado</p>
         <h1>Gracias por tu compra</h1>
-        <p>
-          Tu orden fue creada en el backend. Te enviaremos la confirmacion a{' '}
-          <strong>{form.email}</strong>.
+        <p className="checkout-success-id">
+          Tu pedido <strong>#{formatOrderId(orderId)}</strong> fue registrado correctamente.
         </p>
-        <Link className="button primary" to="/catalogo">
-          Seguir comprando
-        </Link>
+        <p>
+          Enviamos la confirmacion a <strong>{shippingForm.email}</strong>. Podes seguir el
+          estado desde Mis pedidos.
+        </p>
+        <div className="checkout-success-actions">
+          <Link className="button primary" to={`/pedidos/${orderId}`}>
+            <PackageIcon size={16} />
+            Ver detalle del pedido
+          </Link>
+          <Link className="button ghost" to="/pedidos">
+            Mis pedidos
+          </Link>
+          <Link className="checkout-back centered" to="/catalogo">
+            Seguir comprando
+          </Link>
+        </div>
       </section>
     )
   }
@@ -102,94 +176,221 @@ function Checkout() {
   return (
     <section className="checkout-page section-container">
       <div className="checkout-header">
-        <p className="eyebrow">Ultimo paso</p>
+        <p className="eyebrow">Checkout</p>
         <h1>Finalizar compra</h1>
       </div>
 
-      <div className="checkout-layout">
-        <form className="checkout-form" onSubmit={handleSubmit}>
-          <h2>Datos de envio</h2>
-          <div className="checkout-grid">
-            <label>
-              Nombre completo
-              <input name="name" value={form.name} onChange={handleChange} required />
-            </label>
-            <label>
-              Email
-              <input
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={handleChange}
-                required
-              />
-            </label>
-            <label>
-              Telefono
-              <input name="phone" value={form.phone} onChange={handleChange} required />
-            </label>
-            <label className="full-width">
-              Direccion
-              <input name="address" value={form.address} onChange={handleChange} required />
-            </label>
-            <label>
-              Ciudad
-              <input name="city" value={form.city} onChange={handleChange} required />
-            </label>
-            <label>
-              Codigo postal
-              <input name="postalCode" value={form.postalCode} onChange={handleChange} required />
-            </label>
-            <label className="full-width">
-              Notas del pedido (opcional)
-              <textarea name="notes" value={form.notes} onChange={handleChange} rows="4" />
-            </label>
-          </div>
-
-          {error ? <p className="auth-error">{error}</p> : null}
-
-          <button className="button checkout-btn full" type="submit" disabled={loading}>
-            {loading ? 'Confirmando...' : 'Confirmar compra'}
-          </button>
-          <Link className="checkout-back" to="/carrito">
-            Volver al carrito
-          </Link>
-        </form>
-
-        <aside className="checkout-summary">
-          <h2>Resumen del pedido</h2>
-          <ul className="checkout-items">
-            {items.map(({ product, quantity, unitPrice }) => (
-              <li key={product.idProduct}>
-                <span>
-                  {product.productName} x{quantity}
-                </span>
-                <strong>{formatPrice(unitPrice * quantity)}</strong>
-              </li>
-            ))}
-          </ul>
-          <div className="cart-summary-row">
-            <span>Subtotal</span>
-            <strong>{formatPrice(subtotal)}</strong>
-          </div>
-          <div className="cart-summary-row shipping-row">
-            <span>Envio</span>
-            <strong>{formatPrice(shipping)}</strong>
-          </div>
-          {discountPercent > 0 ? (
-            <div className="cart-summary-row discount-row">
-              <span>Descuento ({discountPercent}%)</span>
-              <strong>-{formatPrice(discountAmount)}</strong>
+      <div className="checkout-steps">
+        {[
+          { id: 'shipping', label: 'Envio', Icon: MapPinIcon },
+          { id: 'payment', label: 'Pago', Icon: CreditCardIcon },
+        ].map((item, index) => {
+          const active = step === item.id
+          const done = item.id === 'shipping' && step === 'payment'
+          return (
+            <div className="checkout-step-wrap" key={item.id}>
+              {index > 0 ? <span className="checkout-step-line" /> : null}
+              <span
+                className={
+                  active ? 'checkout-step active' : done ? 'checkout-step done' : 'checkout-step'
+                }
+              >
+                {done ? <CheckIcon size={14} /> : <item.Icon size={14} />}
+                {item.label}
+              </span>
             </div>
-          ) : null}
-          <div className="cart-summary-row checkout-total">
-            <span>Total estimado</span>
-            <strong>{formatPrice(total)}</strong>
-          </div>
-          <p className="cart-note">
-            La orden en el backend aplica el descuento sobre el subtotal del carrito.
-          </p>
-        </aside>
+          )
+        })}
+      </div>
+
+      <div className="checkout-layout">
+        <div className="checkout-form-panel">
+          {step === 'shipping' ? (
+            <form
+              className="checkout-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                if (canContinueShipping) setStep('payment')
+              }}
+            >
+              <h2>Datos de envio</h2>
+              <div className="checkout-grid">
+                <label>
+                  Nombre completo
+                  <input
+                    name="name"
+                    value={shippingForm.name}
+                    onChange={updateShipping}
+                    required
+                  />
+                </label>
+                <label>
+                  Email
+                  <input
+                    name="email"
+                    type="email"
+                    value={shippingForm.email}
+                    onChange={updateShipping}
+                    required
+                  />
+                </label>
+                <label>
+                  Telefono
+                  <input
+                    name="phone"
+                    value={shippingForm.phone}
+                    onChange={updateShipping}
+                    required
+                  />
+                </label>
+                <label className="full-width">
+                  Direccion
+                  <input
+                    name="address"
+                    value={shippingForm.address}
+                    onChange={updateShipping}
+                    required
+                  />
+                </label>
+                <label>
+                  Ciudad
+                  <input name="city" value={shippingForm.city} onChange={updateShipping} required />
+                </label>
+                <label>
+                  Codigo postal
+                  <input
+                    name="postalCode"
+                    value={shippingForm.postalCode}
+                    onChange={updateShipping}
+                    required
+                  />
+                </label>
+                <label className="full-width">
+                  Notas (opcional)
+                  <textarea
+                    name="notes"
+                    value={shippingForm.notes}
+                    onChange={updateShipping}
+                    rows="4"
+                  />
+                </label>
+              </div>
+              <button
+                className="button checkout-btn full"
+                type="submit"
+                disabled={!canContinueShipping}
+              >
+                Continuar al pago
+              </button>
+              <Link className="checkout-back" to="/carrito">
+                Volver al carrito
+              </Link>
+            </form>
+          ) : (
+            <div className="checkout-form">
+              <h2>Metodo de pago</h2>
+              <div className="payment-methods">
+                {PAYMENT_METHODS.map((method) => (
+                  <button
+                    key={method.id}
+                    type="button"
+                    className={
+                      paymentMethod === method.id ? 'payment-method active' : 'payment-method'
+                    }
+                    onClick={() => setPaymentMethod(method.id)}
+                  >
+                    <CreditCardIcon size={18} />
+                    <strong>{method.label}</strong>
+                    <span>{method.description}</span>
+                  </button>
+                ))}
+              </div>
+
+              {selectedPayment?.requiresCard ? (
+                <div className="checkout-grid payment-card-grid">
+                  <label className="full-width">
+                    Numero de tarjeta
+                    <input
+                      name="cardNumber"
+                      value={cardForm.cardNumber}
+                      onChange={updateCard}
+                      placeholder="4242 4242 4242 4242"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Vencimiento
+                    <input
+                      name="expiry"
+                      value={cardForm.expiry}
+                      onChange={updateCard}
+                      placeholder="MM/AA"
+                      required
+                    />
+                  </label>
+                  <label>
+                    CVV
+                    <input
+                      name="cvv"
+                      value={cardForm.cvv}
+                      onChange={updateCard}
+                      placeholder="123"
+                      required
+                    />
+                  </label>
+                  <label className="full-width">
+                    Nombre en la tarjeta
+                    <input
+                      name="cardName"
+                      value={cardForm.cardName}
+                      onChange={updateCard}
+                      required
+                    />
+                  </label>
+                </div>
+              ) : (
+                <p className="payment-transfer-note">
+                  Recibiras por email los datos de la cuenta para transferir{' '}
+                  <strong>{formatPrice(total)}</strong>.
+                </p>
+              )}
+
+              <p className="payment-secure-note">
+                <CheckIcon size={16} />
+                Pago simulado para demostracion. No se procesa un cobro real.
+              </p>
+
+              {error ? <p className="auth-error">{error}</p> : null}
+
+              <div className="checkout-payment-actions">
+                <button
+                  className="button ghost"
+                  type="button"
+                  onClick={() => setStep('shipping')}
+                >
+                  Volver
+                </button>
+                <button
+                  className="button checkout-btn"
+                  type="button"
+                  onClick={handleConfirmOrder}
+                  disabled={loading || !canConfirmPayment}
+                >
+                  {loading ? 'Procesando...' : 'Confirmar compra'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <CheckoutSummary
+          items={items}
+          subtotal={subtotal}
+          shipping={shippingCost}
+          discountPercent={discountPercent}
+          discountAmount={discountAmount}
+          total={total}
+        />
       </div>
     </section>
   )

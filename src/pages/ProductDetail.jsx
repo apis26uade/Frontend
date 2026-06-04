@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeftIcon, CheckIcon, LeafIcon } from '../components/Icons.jsx'
 import ProductCard from '../components/ProductCard.jsx'
 import { useCart } from '../context/CartContext.jsx'
-import { featuredProducts } from '../data/products.js'
-import { getProductById } from '../services/api.js'
+import { getProductById, getProducts } from '../services/catalog.js'
 
 const formatPrice = (price) =>
   new Intl.NumberFormat('es-AR', {
@@ -15,20 +15,9 @@ const formatPrice = (price) =>
 function ProductDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [product, setProduct] = useState(null)
+  const product = useMemo(() => getProductById(id), [id])
   const [quantity, setQuantity] = useState(1)
-  const [added, setAdded] = useState(false)
   const { addItem } = useCart()
-
-  useEffect(() => {
-    getProductById(id)
-      .then((data) => {
-        setProduct(data ?? null)
-        setQuantity(1)
-        setAdded(false)
-      })
-      .catch(() => setProduct(null))
-  }, [id])
 
   if (!product) {
     return (
@@ -42,7 +31,7 @@ function ProductDetail() {
     )
   }
 
-  const relatedProducts = featuredProducts
+  const relatedProducts = getProducts()
     .filter(
       (item) =>
         item.idProduct !== product.idProduct &&
@@ -59,8 +48,6 @@ function ProductDetail() {
 
   const handleAdd = () => {
     addItem(product, quantity)
-    setAdded(true)
-    setTimeout(() => setAdded(false), 2200)
   }
 
   return (
@@ -118,18 +105,27 @@ function ProductDetail() {
           ) : null}
 
           <button
-            className={added ? 'button success full' : 'button primary full'}
+            className="button primary full"
             type="button"
             onClick={handleAdd}
             disabled={product.stock === 0}
           >
-            {added ? 'Agregado!' : product.stock === 0 ? 'Sin stock' : 'Agregar al carrito'}
+            {product.stock === 0 ? 'Sin stock' : 'Agregar al carrito'}
           </button>
 
           <div className="detail-features">
-            <span>Materiales naturales y sostenibles</span>
-            <span>Envio gratis en compras mayores a $150</span>
-            <span>Cambios y devoluciones en 30 dias</span>
+            <div className="detail-feature">
+              <LeafIcon size={18} />
+              <span>Materiales naturales y sostenibles</span>
+            </div>
+            <div className="detail-feature">
+              <CheckIcon size={18} />
+              <span>Envio gratis en compras mayores a $150</span>
+            </div>
+            <div className="detail-feature">
+              <ArrowLeftIcon size={18} />
+              <span>Cambios y devoluciones en 30 dias</span>
+            </div>
           </div>
         </div>
       </section>
